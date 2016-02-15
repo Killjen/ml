@@ -83,3 +83,11 @@ neg_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="negative"])
 wcloud(pos_text,'wc_pos.png')
 wcloud(neu_text,'wc_neu.png')
 wcloud(neg_text,'wc_neg.png')
+
+#set up Stanford NLP: 
+#from nltk.tag import StanfordNERTagger
+#st = StanfordNERTagger('english.all.3class.distsim.crf.ser.gz') 
+#print st.tag('Rami Eid is studying at Stony Brook University in NY'.split()) 
+from nltk.tag import StanfordPOSTagger
+st = StanfordPOSTagger('english-bidirectional-distsim.tagger') 
+st.tag('What is the airspeed of an unladen swallow ?'.split())
