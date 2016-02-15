@@ -1,9 +1,11 @@
 #!/usr/bin/python2.7
 import numpy as np
-import matplotlib as plt
+import matplotlib as mplt
+import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import math
+from wordcloud import WordCloud
 
 filename = os.path.join('airline-twitter-sentiment','Tweets.csv')
 tweets = pd.read_csv(filename)
@@ -54,3 +56,30 @@ print "conf < 1: " + str(conf) + " out of " + str(n) + " (" + str(100*conf/(1.0*
 print "sentiment positive: " + str(pos) + " out of " + str(n) + " (" + str(100*pos/(1.0*n)) + "%)"
 print "sentiment neutral: " + str(neu) + " out of " + str(n) + " (" + str(100*neu/(1.0*n)) + "%)"
 print "sentiment negative: " + str(neg) + " out of " + str(n) + " (" + str(100*neg/(1.0*n)) + "%)"
+
+#generate WordCloud
+#see https://github.com/amueller/word_cloud
+
+#generate one string of text
+text = ' '.join(tw_text)
+
+# take relative word frequencies into account, lower max_font_size
+def wcloud(text, filename):
+	wordcloud = WordCloud(width=1000, height=500).generate(text) #, max_font_size=85, relative_scaling=.5
+	plt.figure(figsize=(10,5))
+	plt.imshow(wordcloud)
+	plt.axis("off")
+	fig = plt.gcf()
+	#plt.show()
+	fig.savefig(filename)
+
+wcloud(text, 'wc_all.png')
+
+#now for pos, neu and neg respectively
+pos_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="positive"])
+neu_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="neutral"])
+neg_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="negative"])
+
+wcloud(pos_text,'wc_pos.png')
+wcloud(neu_text,'wc_neu.png')
+wcloud(neg_text,'wc_neg.png')
