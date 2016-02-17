@@ -8,6 +8,7 @@ import math
 from wordcloud import WordCloud
 import re
 import nltk 
+from random import shuffle
 
 filename = os.path.join('airline-twitter-sentiment','Tweets.csv')
 tweets = pd.read_csv(filename)
@@ -171,14 +172,28 @@ stopWords = getStopWordList('stopwords.txt')
 # 	featureVector = getFeatureVector(processed_Tweet[x])
 # 	print featureVector
 
+#get training and test set
+#first shuffle tweets
+rp = np.random.permutation(n)
+
+#training data: first 2/3 of shuffled tweets
+pos_text = ' '.join([tw_text[i] for j,i in enumerate(rp) if tw_sent[i]=="positive" and j<(2.0/3*n)]) #i is the index randomly permutated, j is the index of the permutation
+neu_text = ' '.join([tw_text[i] for j,i in enumerate(rp) if tw_sent[i]=="neutral" and j<(2.0/3*n)])
+neg_text = ' '.join([tw_text[i] for j,i in enumerate(rp) if tw_sent[i]=="negative" and j<(2.0/3*n)])
+
+test_set = [(tw_text[i],tw_sent[i]) for j,i in enumerate(rp) if j>=(2.0/3*n)]
+
+
 processed_pos = processTweet(pos_text)
 processed_neu = processTweet(neu_text)
 processed_neg = processTweet(neg_text)
+test_set = map(lambda x : (processTweet(x[0]),x[1]), test_set) #HASKELL!
 
 #get the featurevector for the sentiments
 pos_featureVector = getFeatureVector(processed_pos, stopWords)
 neu_featureVector = getFeatureVector(processed_neu, stopWords)
 neg_featureVector = getFeatureVector(processed_neg, stopWords)
+test_set = map(lambda x : (getFeatureVector(x[0], stopWords),x[1]), test_set)
 
 # print pos_featureVector, "\n", "pos_featureVector Laenge:", len(pos_featureVector)
 # print neu_featureVector, "\n", "neu_featureVector Laenge:", len(neu_featureVector)
@@ -188,6 +203,8 @@ tweetlist = []
 tweetlist.append((pos_featureVector, "positive"))
 tweetlist.append((neu_featureVector, "neutral"))
 tweetlist.append((neg_featureVector, "negative"))
+
+
 
 featureList = []
 featureList.extend(pos_featureVector)
@@ -207,22 +224,21 @@ def extract_features(tweet):
 		features['contains(%s)' % word] = (word in tweet_words)
 	return features
 
-# Extract feature vector for all tweets in one shote
 training_set = nltk.classify.util.apply_features(extract_features, tweetlist)
-print training_set
 
 # Train the classifier
 NBClassifier = nltk.NaiveBayesClassifier.train(training_set)
-
+	
 # Test the classifier
-testTweet = tw_text[10]
-print tw_text[10]
+#testTweet = tw_text[10]
+#print tw_text[10]
+correct = 0
+for (featVec,sent) in test_set:
+	class_sent = NBClassifier.classify(extract_features(featVec))
+	if class_sent == sent:
+		correct += 1
 
-processedTestTweet = processTweet(testTweet)
-print "Sentiment: ",NBClassifier.classify(extract_features(getFeatureVector(processedTestTweet, stopWords)))
+print "NBayes: Correctly predicted " + str(correct/(1.0*len(test_tweetlist))) 
 
 # print informative features about the classifier
 print NBClassifier.show_most_informative_features(10)
-
-
-
