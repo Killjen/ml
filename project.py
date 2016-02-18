@@ -177,39 +177,19 @@ stopWords = getStopWordList('stopwords.txt')
 rp = np.random.permutation(n)
 
 #training data: first 2/3 of shuffled tweets
-pos_text = ' '.join([tw_text[i] for j,i in enumerate(rp) if tw_sent[i]=="positive" and j<(2.0/3*n)]) #i is the index randomly permutated, j is the index of the permutation
-neu_text = ' '.join([tw_text[i] for j,i in enumerate(rp) if tw_sent[i]=="neutral" and j<(2.0/3*n)])
-neg_text = ' '.join([tw_text[i] for j,i in enumerate(rp) if tw_sent[i]=="negative" and j<(2.0/3*n)])
+train_set = [(tw_text[i],tw_sent[i]) for j,i in enumerate(rp) if j<(2.0/3*n) and tw_sent_conf[i] == 1 and tw_sent[i] != "neutral"] #for now: only allow conf. of 1 and no neutral
+test_set = [(tw_text[i],tw_sent[i]) for j,i in enumerate(rp) if j>=(2.0/3*n) and tw_sent_conf[i] == 1 and tw_sent[i] != "neutral"]
 
-test_set = [(tw_text[i],tw_sent[i]) for j,i in enumerate(rp) if j>=(2.0/3*n)]
-
-
-processed_pos = processTweet(pos_text)
-processed_neu = processTweet(neu_text)
-processed_neg = processTweet(neg_text)
+train_set = map(lambda x : (processTweet(x[0]),x[1]), train_set)
 test_set = map(lambda x : (processTweet(x[0]),x[1]), test_set) #HASKELL!
 
-#get the featurevector for the sentiments
-pos_featureVector = getFeatureVector(processed_pos, stopWords)
-neu_featureVector = getFeatureVector(processed_neu, stopWords)
-neg_featureVector = getFeatureVector(processed_neg, stopWords)
+#get the featurevector
+train_set = map(lambda x : (getFeatureVector(x[0], stopWords),x[1]), train_set)
 test_set = map(lambda x : (getFeatureVector(x[0], stopWords),x[1]), test_set)
 
-# print pos_featureVector, "\n", "pos_featureVector Laenge:", len(pos_featureVector)
-# print neu_featureVector, "\n", "neu_featureVector Laenge:", len(neu_featureVector)
-# print neg_featureVector, , "\n", "neg_featureVector Laenge:", len(neg_featureVector)
-
-tweetlist = []
-tweetlist.append((pos_featureVector, "positive"))
-tweetlist.append((neu_featureVector, "neutral"))
-tweetlist.append((neg_featureVector, "negative"))
-
-
-
-featureList = []
-featureList.extend(pos_featureVector)
-featureList.extend(neu_featureVector)
-featureList.extend(neg_featureVector)
+featureList = []   #List of Words, if a tweet contains word at index m the mth entry of the featurevector will be the number of occurences of that word
+for (words,sent) in train_set:
+	featureList.extend(words)
 print len(featureList)
 
 # Remove featureList duplicates
@@ -217,28 +197,48 @@ featureList = list(set(featureList))
 print len(featureList)
 
 
-def extract_features(tweet):
-	tweet_words = set(tweet)
-	features = {}
-	for word in featureList:
-		features['contains(%s)' % word] = (word in tweet_words)
-	return features
+def extract_features(tweet_words):
+	featureVec = np.zeros(len(featureList))
+	for word in tweet_words:
+		for i in xrange(len(featureList)):
+			if word == featureList[i]: #Occurences
+				featureVec[i]+=1
+	#for (i,word) in enumerate(featureList):
+	#	featureVec[i] = (word in tweet_words) 
+	return featureVec
+#
 
-training_set = nltk.classify.util.apply_features(extract_features, tweetlist)
+def test_class(nb):
+	# Test the classifier
+	y_real = [s for (w,s) in test_set]
+	y_pred = gnb.fit([extract_features(w) for (w,s) in train_set], [s for (w,s) in train_set]).predict([extract_features(w) for (w,s) in test_set])
 
-# Train the classifier
-NBClassifier = nltk.NaiveBayesClassifier.train(training_set)
-	
-# Test the classifier
-#testTweet = tw_text[10]
-#print tw_text[10]
-correct = 0
-for (featVec,sent) in test_set:
-	class_sent = NBClassifier.classify(extract_features(featVec))
-	if class_sent == sent:
-		correct += 1
+	def eval(real,pred,sent="none"):
+		correct = 0
+		if sent == "none":
+			total = len(y_real)
+			for i in xrange(len(y_real)):
+				if  y_pred[i] == y_real[i]:
+					correct += 1
+		else:
+			total = 0
+			for i in xrange(len(y_real)):
+				if y_real[i] == sent:
+					total += 1
+					if  y_pred[i] == sent:
+						correct += 1
 
-print "NBayes: Correctly predicted " + str(correct/(1.0*len(test_tweetlist))) 
+		print "GNBayes: Correctly predicted " + str(correct/(1.0*total)) + " for sent " + sent
 
-# print informative features about the classifier
-print NBClassifier.show_most_informative_features(10)
+	eval(y_real,y_pred)
+	eval(y_real,y_pred,"positive")
+	#eval(y_real,y_pred,"neutral")
+	eval(y_real,y_pred,"negative")
+	# print informative features about the classifier
+
+from sklearn.naive_bayes import GaussianNB
+gnb = GaussianNB()
+
+print " "
+print "Gaussian NB: "
+test_class(gnb)
