@@ -40,9 +40,9 @@ def getStats():
 	neg = 0
 	neu = 0
 	for i in xrange(n):
-		if type(tw_coord[i]) is not str:
+		if type(tw_coord[i]) is str:
 			coord += 1
-		if type(tw_loc[i]) is not str:
+		if type(tw_loc[i]) is str:
 			loc += 1
 		if tw_rt[i] > 0:
 			rt += 1
@@ -62,6 +62,8 @@ def getStats():
 	print "sentiment positive: " + str(pos) + " out of " + str(n) + " (" + str(100*pos/(1.0*n)) + "%)"
 	print "sentiment neutral: " + str(neu) + " out of " + str(n) + " (" + str(100*neu/(1.0*n)) + "%)"
 	print "sentiment negative: " + str(neg) + " out of " + str(n) + " (" + str(100*neg/(1.0*n)) + "%)"
+
+getStats()
 
 #generate WordCloud
 #see https://github.com/amueller/word_cloud
@@ -144,26 +146,26 @@ def getStopWordList(stopWordListFileName):
 	return stopWords
 
 
-def getFeatureVector(tweet, stopWords):
+def getWords(tweet, stopWords):
 	featureVector = []
 	#split tweet into words
 	words = tweet.split()
 	for w in words:
 		#replace two or more with two occurrences
-		w = replaceTwoOrMore(w)
+		#w = replaceTwoOrMore(w)
 		#strip punctuation
 		w = w.strip('\'"?,.')
 		#check if the word stats with an alphabet
-		val = re.search(r"^[a-zA-Z][a-zA-Z0-9]*$", w)
+		#val = re.search(r"^[a-zA-Z][a-zA-Z0-9]*$", w)
 		#ignore if it is a stop word
-		if(w in stopWords or val is None):
+		if(w in stopWords):# or val is None):
 			continue
 		else:
 			featureVector.append(w.lower())
+		#featureVector.append(w.lower())
 	return featureVector
 
 
-st = open('stopwords.txt', 'r')
 stopWords = getStopWordList('stopwords.txt')
 
 # processed_Tweet = tw_text.copy()
@@ -171,31 +173,30 @@ stopWords = getStopWordList('stopwords.txt')
 # 	processed_Tweet[x] = processTweet(tw_text[x])
 # 	featureVector = getFeatureVector(processed_Tweet[x])
 # 	print featureVector
+#treat airline as text
+train_set = [(tw_text[i] + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n) if tw_sent_conf[i] == 1]# and tw_sent[i] != "neutral"] #for now: only allow conf. of 1 and no neutral
 
-#get training and test set
-#first shuffle tweets
-rp = np.random.permutation(n)
 
-#training data: first 2/3 of shuffled tweets
-train_set = [(tw_text[i],tw_sent[i]) for j,i in enumerate(rp) if j<(2.0/3*n) and tw_sent_conf[i] == 1 and tw_sent[i] != "neutral"] #for now: only allow conf. of 1 and no neutral
-test_set = [(tw_text[i],tw_sent[i]) for j,i in enumerate(rp) if j>=(2.0/3*n) and tw_sent_conf[i] == 1 and tw_sent[i] != "neutral"]
+#treat location as a word:
+train_set = map(lambda x : (processTweet(x[0] + x[1]),x[2]) if type(x[1]) is str else (processTweet(x[0]),x[2]) , train_set)  #HASKELL!
 
-train_set = map(lambda x : (processTweet(x[0]),x[1]), train_set)
-test_set = map(lambda x : (processTweet(x[0]),x[1]), test_set) #HASKELL!
 
 #get the featurevector
-train_set = map(lambda x : (getFeatureVector(x[0], stopWords),x[1]), train_set)
-test_set = map(lambda x : (getFeatureVector(x[0], stopWords),x[1]), test_set)
+train_set = map(lambda x : (getWords(x[0], stopWords),x[1]), train_set)
+
+
+from sklearn.cross_validation import train_test_split
+X_train, X_test, Y_train, Y_test = train_test_split([x for (x,s) in train_set], [s for (x,s) in train_set], test_size=0.4, random_state=0)
+
 
 featureList = []   #List of Words, if a tweet contains word at index m the mth entry of the featurevector will be the number of occurences of that word
-for (words,sent) in train_set:
+for words in X_train:
 	featureList.extend(words)
 print len(featureList)
 
 # Remove featureList duplicates
 featureList = list(set(featureList))
 print len(featureList)
-
 
 def extract_features(tweet_words):
 	featureVec = np.zeros(len(featureList))
@@ -206,34 +207,33 @@ def extract_features(tweet_words):
 	#for (i,word) in enumerate(featureList):
 	#	featureVec[i] = (word in tweet_words) 
 	return featureVec
+
 #
+def eval(real,pred,sent="none"):
+	correct = 0
+	if sent == "none":
+		total = len(real)
+		for i in xrange(len(real)):
+			if  pred[i] == real[i]:
+				correct += 1
+	else:
+		total = 0
+		for i in xrange(len(real)):
+			if real[i] == sent:
+				total += 1
+				if  pred[i] == sent:
+					correct += 1
+
+	print "GNBayes: Correctly predicted " + str(correct/(1.0*total)) + " for sent " + sent
 
 def test_class(nb):
 	# Test the classifier
-	y_real = [s for (w,s) in test_set]
-	y_pred = gnb.fit([extract_features(w) for (w,s) in train_set], [s for (w,s) in train_set]).predict([extract_features(w) for (w,s) in test_set])
+	Y_pred = gnb.fit([extract_features(w) for w in X_train], Y_train).predict([extract_features(w) for w in X_test])
 
-	def eval(real,pred,sent="none"):
-		correct = 0
-		if sent == "none":
-			total = len(y_real)
-			for i in xrange(len(y_real)):
-				if  y_pred[i] == y_real[i]:
-					correct += 1
-		else:
-			total = 0
-			for i in xrange(len(y_real)):
-				if y_real[i] == sent:
-					total += 1
-					if  y_pred[i] == sent:
-						correct += 1
-
-		print "GNBayes: Correctly predicted " + str(correct/(1.0*total)) + " for sent " + sent
-
-	eval(y_real,y_pred)
-	eval(y_real,y_pred,"positive")
-	#eval(y_real,y_pred,"neutral")
-	eval(y_real,y_pred,"negative")
+	eval(Y_test,Y_pred)
+	eval(Y_test,Y_pred,"positive")
+	eval(Y_test,Y_pred,"neutral")
+	eval(Y_test,Y_pred,"negative")
 	# print informative features about the classifier
 
 from sklearn.naive_bayes import GaussianNB
