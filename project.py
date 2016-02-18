@@ -28,7 +28,7 @@ neg_text = tweets.text[tweets.airline_sentiment == "negative"]
 #use 1 for positive sentiment, -1 for negative, 0 for neutral
 y = np.concatenate((np.ones(len(pos_text)), np.zeros(len(neu_text)), np.full(len(neg_text),-1,dtype=np.int)))
 
-x_train, x_test, y_train, y_test = train_test_split(np.concatenate((pos_text, neu_text, neg_text)), y, test_size=0.2)
+x_train, x_test, y_train, y_test = train_test_split(np.concatenate((pos_text, neu_text, neg_text)), y, test_size=0.2, random_state=0)
 
 def cleanText(corpus):
     corpus = [z.lower().replace('\n','').split() for z in corpus]
