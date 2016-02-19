@@ -9,10 +9,10 @@ from wordcloud import WordCloud
 import re
 import nltk 
 from random import shuffle
+import emoji #https://pypi.python.org/pypi/emoji/
 
 filename = os.path.join('airline-twitter-sentiment','Tweets.csv')
 tweets = pd.read_csv(filename)
-
 
 tw_text = tweets.text
 tw_name = tweets.name
@@ -39,6 +39,7 @@ def getStats():
 	pos = 0 #sent is positive
 	neg = 0
 	neu = 0
+	smileys = 0
 	for i in xrange(n):
 		if type(tw_coord[i]) is str:
 			coord += 1
@@ -54,6 +55,9 @@ def getStats():
 			neu += 1
 		if tw_sent[i] == "negative":
 			neg += 1
+		utwt = unicode(tw_text[i], "utf-8")
+		if ":)" in tw_text[i] or ":-)" in tw_text[i] or ":D" in tw_text[i] or ":-D" in tw_text[i] or "=)" in tw_text[i] or "=D" in tw_text[i] or ";)" in tw_text[i] or ";-)" in tw_text[i] or ":'(" in tw_text[i] or ":-(" in tw_text[i] or ":(" in tw_text[i] or "D:" in tw_text[i] or "xD" in tw_text[i] or emoji.emojize(':thumps_up:', use_aliases=True) in utwt or emoji.emojize(':smile:', use_aliases=True) in utwt or emoji.emojize(':laughing:', use_aliases=True) in utwt or emoji.emojize(':smiley', use_aliases=True) in utwt or emoji.emojize(':smirk:', use_aliases=True) in utwt or emoji.emojize(':wink:', use_aliases=True) in utwt or emoji.emojize(':satisfied:', use_aliases=True) in utwt:
+			smileys+=1   
 
 	print "available coords: " + str(coord) + " out of " + str(n) + " (" + str(100*coord/(1.0*n)) + "%)"
 	print "available locs: " + str(loc) + " out of " + str(n) + " (" + str(100*loc/(1.0*n)) + "%)"
@@ -62,6 +66,7 @@ def getStats():
 	print "sentiment positive: " + str(pos) + " out of " + str(n) + " (" + str(100*pos/(1.0*n)) + "%)"
 	print "sentiment neutral: " + str(neu) + " out of " + str(n) + " (" + str(100*neu/(1.0*n)) + "%)"
 	print "sentiment negative: " + str(neg) + " out of " + str(n) + " (" + str(100*neg/(1.0*n)) + "%)"
+	print "smileys: " + str(smileys) + " out of " + str(n) + " (" + str(100*smileys/(1.0*n)) + "%)"
 
 getStats()
 
@@ -108,6 +113,7 @@ def processTweet(tweet):
 	tweet = tweet.lower()
 	#Convert www.* or https?://* to URL
 	tweet = re.sub('((www\.[^\s]+)|(https?://[^\s]+))','URL',tweet)
+	#Convert Smileys to :) or :(
 	#Convert @username to AT_USER
 	tweet = re.sub('@[^\s]+','AT_USER',tweet)
 	#Remove additional white spaces
@@ -156,9 +162,9 @@ def getWords(tweet, stopWords):
 		#strip punctuation
 		w = w.strip('\'"?,.')
 		#check if the word stats with an alphabet
-		#val = re.search(r"^[a-zA-Z][a-zA-Z0-9]*$", w)
+		val = re.search(r"^[a-zA-Z][a-zA-Z0-9]*$", w)
 		#ignore if it is a stop word
-		if(w in stopWords):# or val is None):
+		if(w in stopWords or val is None):
 			continue
 		else:
 			featureVector.append(w.lower())
@@ -228,7 +234,7 @@ def eval(real,pred,sent="none"):
 
 def test_class(nb):
 	# Test the classifier
-	Y_pred = gnb.fit([extract_features(w) for w in X_train], Y_train).predict([extract_features(w) for w in X_test])
+	Y_pred = nb.fit([extract_features(w) for w in X_train], Y_train).predict([extract_features(w) for w in X_test])
 
 	eval(Y_test,Y_pred)
 	eval(Y_test,Y_pred,"positive")
@@ -236,9 +242,19 @@ def test_class(nb):
 	eval(Y_test,Y_pred,"negative")
 	# print informative features about the classifier
 
-from sklearn.naive_bayes import GaussianNB
-gnb = GaussianNB()
+from sklearn.naive_bayes import MultinomialNB
+mnb = MultinomialNB()
 
 print " "
-print "Gaussian NB: "
-test_class(gnb)
+print "Multinomial NB: "
+test_class(mnb)
+
+def print_top15(feature_names,clf):
+    """Prints features with the highest coefficient values, per class"""
+    class_labels=clf.classes_
+    for i, class_label in enumerate(class_labels):
+        top10 = np.argsort(clf.coef_[i])[-15:]
+        print("%s: %s" % (class_label,
+              " ".join(feature_names[j] for j in top10)))
+
+print_top15(featureList,mnb)
