@@ -125,6 +125,7 @@ if __name__ == '__main__':
 
 	# for i in xrange(20):
 	# 	print lr.predict(test_vecs[i]), x_test[i]
+	print "\n",tw_w2v.most_similar('wonderful')
 
 
 	#ROC curve geht nur bei positiv negative (ohne neutral)
