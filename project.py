@@ -10,20 +10,21 @@ import numpy as np
 import pandas as pd 
 import os 
 import re
+import tsne
 
 
 def cleanText(corpus, stopWords):
-	corpus = [re.sub('((www\.[^\s]+)|(https?://[^\s]+))','URL',z) for z in corpus]
-	corpus = [re.sub('@[^\s]+','AT_USER',z) for z in corpus]
-	corpus = [re.sub('[\s]+', ' ', z) for z in corpus]
-	corpus = [re.sub(r'#([^\s]+)', r'\1', z) for z in corpus]
-	corpus = [z.strip('\'"') for z in corpus]
+	# corpus = [re.sub('((www\.[^\s]+)|(https?://[^\s]+))','URL',z) for z in corpus]
+	# corpus = [re.sub('@[^\s]+','AT_USER',z) for z in corpus]
+	# corpus = [re.sub('[\s]+', ' ', z) for z in corpus]
+	# corpus = [re.sub(r'#([^\s]+)', r'\1', z) for z in corpus]
+	# corpus = [z.strip('\'"') for z in corpus]
 	corpus = [z.lower().replace('\n','') for z in corpus]
 
 	corpus = [z.split() for z in corpus]
 
-	for i,z in enumerate(corpus):
-		corpus[i] = [w for w in z if w not in stopWords ]
+	# for i,z in enumerate(corpus):
+	# 	corpus[i] = [w for w in z if w not in stopWords ]
 
 	return corpus
 
@@ -74,9 +75,14 @@ if __name__ == '__main__':
 	tw_time = tweets.tweet_created
 	tw_loc = tweets.tweet_location
 
-	pos_text = tweets.text[tweets.airline_sentiment == "positive"]#+tw_air[tweets.airline_sentiment == "positive"]
-	neu_text = tweets.text[tweets.airline_sentiment == "neutral"]#+tw_air[tweets.airline_sentiment == "neutral"] 
-	neg_text = tweets.text[tweets.airline_sentiment == "negative"]#+tw_air[tweets.airline_sentiment == "negative"]
+
+	# pos_text = tweets.text[tw_sent == "positive"]#+tw_air[tweets.airline_sentiment == "positive"]
+	# neu_text = tweets.text[tw_sent == "neutral" ]#+tw_air[tweets.airline_sentiment == "neutral"] 
+	# neg_text = tweets.text[tw_sent == "negative"]#+tw_air[tweets.airline_sentiment == "negative"]
+
+	pos_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "positive" and tw_sent_conf[i] == 1.0]
+	neu_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "neutral"  and tw_sent_conf[i] == 1.0]
+	neg_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "negative" and tw_sent_conf[i] == 1.0]
 
 
 	#use 1 for positive sentiment, -1 for negative, 0 for neutral
@@ -109,6 +115,8 @@ if __name__ == '__main__':
 	train_vecs = np.concatenate([buildWordVector(z, n_dim) for z in x_train])
 	train_vecs = scale(train_vecs)
 
+	#y = tsne.tsne(train_vecs, 2)
+
 
 	#Train word2vec on test tweets
 	#tw_w2v.train(x_test)
@@ -118,14 +126,15 @@ if __name__ == '__main__':
 	test_vecs = scale(test_vecs)
 	
 
-	lr = SGDClassifier(loss='log', penalty='l1', shuffle=False)
+	lr = SGDClassifier(loss='log', penalty='l1', shuffle=True)
 	lr.fit(train_vecs, y_train)
 
 	print 'Test Accuracy: %.2f'%lr.score(test_vecs, y_test)
 
-	# for i in xrange(20):
-	# 	print lr.predict(test_vecs[i]), x_test[i]
-	print "\n",tw_w2v.most_similar('wonderful')
+	for i in xrange(20):
+		print lr.predict(test_vecs[i]), x_test[i]
+	# print "\n",tw_w2v.most_similar('wonderful')
+	# print "\n",tw_w2v.most_similar('bad')
 
 
 	#ROC curve geht nur bei positiv negative (ohne neutral)
