@@ -10,6 +10,11 @@ import re
 import nltk 
 from random import shuffle
 import emoji #https://pypi.python.org/pypi/emoji/
+from sklearn.metrics import *
+from sklearn.grid_search import GridSearchCV
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.cross_validation import train_test_split
+
 
 filename = os.path.join('airline-twitter-sentiment','Tweets.csv')
 tweets = pd.read_csv(filename)
@@ -68,14 +73,6 @@ def getStats():
 	print "sentiment negative: " + str(neg) + " out of " + str(n) + " (" + str(100*neg/(1.0*n)) + "%)"
 	print "smileys: " + str(smileys) + " out of " + str(n) + " (" + str(100*smileys/(1.0*n)) + "%)"
 
-getStats()
-
-#generate WordCloud
-#see https://github.com/amueller/word_cloud
-
-#generate one string of text
-text = ' '.join(tw_text)
-
 # take relative word frequencies into account, lower max_font_size
 def wcloud(text, filename):
 	wordcloud = WordCloud(width=1000, height=500).generate(text) #, max_font_size=85, relative_scaling=.5
@@ -86,24 +83,6 @@ def wcloud(text, filename):
 	#plt.show()
 	fig.savefig(filename)
 
-#wcloud(text, 'wc_all.png')
-
-#now for pos, neu and neg respectively
-pos_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="positive"])
-neu_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="neutral"])
-neg_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="negative"])
-
-# wcloud(pos_text,'wc_pos.png')
-# wcloud(neu_text,'wc_neu.png')
-# wcloud(neg_text,'wc_neg.png')
-
-#set up Stanford NLP: 
-#from nltk.tag import StanfordNERTagger
-#st = StanfordNERTagger('english.all.3class.distsim.crf.ser.gz') 
-#print st.tag('Rami Eid is studying at Stony Brook University in NY'.split()) 
-# from nltk.tag import StanfordPOSTagger
-# st = StanfordPOSTagger('english-bidirectional-distsim.tagger') 
-# st.tag('What is the airspeed of an unladen swallow ?'.split())
 
 #start process_tweet
 def processTweet(tweet):
@@ -124,10 +103,6 @@ def processTweet(tweet):
 	tweet = tweet.strip('\'"')
 	return tweet
 #end
-
-
-#initialize stopWords
-stopWords = []
 
 
 def replaceTwoOrMore(s):
@@ -171,40 +146,32 @@ def getWords(tweet, stopWords):
 		#featureVector.append(w.lower())
 	return featureVector
 
+def n_grams(words, n):
+	return zip(*[words[i:] for i in xrange(n)])
 
-stopWords = getStopWordList('stopwords.txt')
+def feature_list(X_train, bigrams=False):
+	"""
+	input: training tweets
+	returns: list of all used words (and bigrams)
+	"""
+	bigram_feats = set([])
+	featureList = set([])   #List of Words, if a tweet contains word at index m the mth entry of the featurevector will be the number of occurences of that word
+	for words in X_train:
+		featureList.update(words)
+		if bigrams == True:
+			for bigram in n_grams(words, 2):
+				bigram_feats.add(bigram)
+	return list(featureList), list(bigram_feats)
 
-# processed_Tweet = tw_text.copy()
-# for x in xrange(len(tw_text)):
-# 	processed_Tweet[x] = processTweet(tw_text[x])
-# 	featureVector = getFeatureVector(processed_Tweet[x])
-# 	print featureVector
-#treat airline as text
-train_set = [(tw_text[i] + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n) if tw_sent_conf[i] == 1]# and tw_sent[i] != "neutral"] #for now: only allow conf. of 1 and no neutral
+def extract_features(tweet_words, featureList):
+	"""
+	args:
+	tweet_words: list of strings
+	featureList: set of all words used in the training set
 
-
-#treat location as a word:
-train_set = map(lambda x : (processTweet(x[0] + x[1]),x[2]) if type(x[1]) is str else (processTweet(x[0]),x[2]) , train_set)  #HASKELL!
-
-
-#get the featurevector
-train_set = map(lambda x : (getWords(x[0], stopWords),x[1]), train_set)
-
-
-from sklearn.cross_validation import train_test_split
-X_train, X_test, Y_train, Y_test = train_test_split([x for (x,s) in train_set], [s for (x,s) in train_set], test_size=0.4, random_state=0)
-
-
-featureList = []   #List of Words, if a tweet contains word at index m the mth entry of the featurevector will be the number of occurences of that word
-for words in X_train:
-	featureList.extend(words)
-print len(featureList)
-
-# Remove featureList duplicates
-featureList = list(set(featureList))
-print len(featureList)
-
-def extract_features(tweet_words):
+	extracts feature vector from a given tweet
+	that has counts at the index where the word under consideration occurs in featureList
+	"""
 	featureVec = np.zeros(len(featureList))
 	for word in tweet_words:
 		for i in xrange(len(featureList)):
@@ -213,6 +180,83 @@ def extract_features(tweet_words):
 	#for (i,word) in enumerate(featureList):
 	#	featureVec[i] = (word in tweet_words) 
 	return featureVec
+
+def extract_bigram_features(tweet_words, bigram_feats):
+	"""
+	args:
+	tweet_words: list of strings
+	featureList: set of all words used in the training set
+	
+	extracts feature vector from a given tweet
+	that has counts at the index where the bigram under consideration occurs in bigram_feats
+	"""
+	bigram_vec = np.zeros(len(bigram_feats))
+	for bigram in n_grams(tweet_words, 2):
+		for i in xrange(len(bigram_feats)):
+			if bigram == bigram_feats[i]: #Occurences
+				bigram_vec[i]+=1
+	return bigram_vec
+
+def create_feature_vec(tweet, featureList, bigrams=False, bigram_feats=None):
+	"""
+	args: 
+	tweet: a list of strings
+	bigrams: bool, if bigrams should be used
+
+	returns an array that contains the frequencies of a word (and bigram) in the current tweet
+	"""
+	if bigrams == True:
+		return np.concatenate((extract_features(tweet, featureList), extract_bigram_features(tweet, bigram_feats)))
+	else:
+		return extract_features(tweet, featureList)
+
+def tweet2vec(example_set, featureList, bigrams=False, bigram_feats=None):
+	"""
+	args: 
+	example_set: list of lists of strings
+	bigrams: bool, if bigrams should be used
+
+	returns a matrix that contains the frequencies of a word (and bigram) for every tweet
+	in the given set
+	"""
+	for i,ex in enumerate(example_set):
+		example_set[i] = create_feature_vec(ex, featureList, bigrams, bigram_feats)
+	return example_set
+
+def param_optimization(clf, X_train):
+	# optimization with grid search
+	plt.xlabel('alpha')
+	plt.ylabel('accuracy')
+	plt.title('MultinomialNB')
+	plt_x = []
+	plt_y = []
+	plt2_x = []
+	plt2_y = []
+	print('\n-------------- Optimization --------------')
+	parameters = {'fit_prior':(True, False), 'alpha':[0, .2, .4, .6, .8, 1, 1.2, 1.4, 1.6, 1.8, 2.0]}
+	clf = GridSearchCV(clf, parameters, cv=5)
+	# clf.fit([extract_features(w) for w in X_train], Y_train)
+	clf.fit(X_train, Y_train)
+	print "Best accuracy score for MultinomialNB:"
+	print clf.best_score_, 'with', clf.best_params_
+	print "\nGrid scores on development set:"
+	for params, mean_score, scores in clf.grid_scores_:
+	    print("%0.3f (+/-%0.03f) for %r"
+	          % (mean_score, scores.std() * 2, params))
+	    if params['fit_prior'] == True:
+	    	plt_x.append(params['alpha'])
+	    	plt_y.append(mean_score)
+	    else:
+	   		plt2_x.append(params['alpha'])
+	   		plt2_y.append(mean_score)
+	print '\nInitializing Multinomial Naive Bayes with fit_prior={} and alpha={}'.format(clf.best_params_.values()[1], clf.best_params_.values()[0])
+	opt_mnb = MultinomialNB(fit_prior=clf.best_params_.values()[1], alpha=clf.best_params_.values()[0])
+	print '-------------- End Optimization --------------\n'
+	plt.plot(plt_x, plt_y, label='fit prior')
+	plt.plot(plt2_x, plt2_y, 'r', label='uniform prior')
+	plt.legend(loc=4)
+	plt.show()
+	return opt_mnb
 
 #
 def eval(real,pred,sent="none"):
@@ -234,20 +278,15 @@ def eval(real,pred,sent="none"):
 
 def test_class(nb):
 	# Test the classifier
-	Y_pred = nb.fit([extract_features(w) for w in X_train], Y_train).predict([extract_features(w) for w in X_test])
+	nb.fit(X_train, Y_train)
+	Y_pred = nb.predict(X_test)
 
 	eval(Y_test,Y_pred)
 	eval(Y_test,Y_pred,"positive")
 	eval(Y_test,Y_pred,"neutral")
 	eval(Y_test,Y_pred,"negative")
+	print 'ACC:', accuracy_score(Y_test, Y_pred)
 	# print informative features about the classifier
-
-from sklearn.naive_bayes import MultinomialNB
-mnb = MultinomialNB()
-
-print " "
-print "Multinomial NB: "
-test_class(mnb)
 
 def print_top15(feature_names,clf):
     """Prints features with the highest coefficient values, per class"""
@@ -257,4 +296,52 @@ def print_top15(feature_names,clf):
         print("%s: %s" % (class_label,
               " ".join(feature_names[j] for j in top10)))
 
-print_top15(featureList,mnb)
+if __name__ == '__main__':
+	getStats()
+	#generate WordCloud
+	#see https://github.com/amueller/word_cloud
+	#generate one string of text
+	text = ' '.join(tw_text)
+	#wcloud(text, 'wc_all.png')
+	#now for pos, neu and neg respectively
+	pos_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="positive"])
+	neu_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="neutral"])
+	neg_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="negative"])
+
+	# wcloud(pos_text,'wc_pos.png')
+	# wcloud(neu_text,'wc_neu.png')
+	# wcloud(neg_text,'wc_neg.png')
+
+	#set up Stanford NLP: 
+	#from nltk.tag import StanfordNERTagger
+	#st = StanfordNERTagger('english.all.3class.distsim.crf.ser.gz') 
+	#print st.tag('Rami Eid is studying at Stony Brook University in NY'.split()) 
+	# from nltk.tag import StanfordPOSTagger
+	# st = StanfordPOSTagger('english-bidirectional-distsim.tagger') 
+	# st.tag('What is the airspeed of an unladen swallow ?'.split())
+
+	stopWords = getStopWordList('stopwords.txt')
+
+	#treat airline as text
+	train_set = [(tw_text[i] + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n) if tw_sent_conf[i] == 1]# and tw_sent[i] != "neutral"] #for now: only allow conf. of 1 and no neutral
+
+	#treat location as a word:
+	train_set = map(lambda x : (processTweet(x[0] + x[1]),x[2]) if type(x[1]) is str else (processTweet(x[0]),x[2]) , train_set)  #HASKELL!
+	#get the featurevector
+	train_set = map(lambda x : (getWords(x[0], stopWords),x[1]), train_set)
+
+	X_train, X_test, Y_train, Y_test = train_test_split([x for (x,s) in train_set], [s for (x,s) in train_set], test_size=0.4, random_state=0)
+
+	bigrams = False
+	featureList, bigram_feats = feature_list(X_train, bigrams)
+	X_train = tweet2vec(X_train, featureList, bigrams)
+	X_test = tweet2vec(X_test, featureList, bigrams)
+
+	mnb = MultinomialNB()
+
+	opt_mnb = param_optimization(mnb, X_train)
+
+	print "Multinomial NB: "
+	test_class(opt_mnb)
+
+	print_top15(featureList, opt_mnb)
