@@ -24,7 +24,7 @@ tw_coord = tweets.tweet_coord
 tw_time = tweets.tweet_created
 tw_loc = tweets.tweet_location
 
-ex = 10232
+ex = 10246
 
 print tw_text[ex]
 print tw_air[ex]
@@ -171,11 +171,11 @@ def getWords(tweet, stopWords):
 		#replace two or more with two occurrences
 		#w = replaceTwoOrMore(w)
 		#strip punctuation
-		w = w.strip('\'"?,.!')
+		w = w.strip('\'"?,.!&')
 		#check if the word stats with an alphabet
 		val = re.search(r"^[a-zA-Z][a-zA-Z0-9]*$", w)
 		#ignore if it is a stop word
-		if(w in stopWords or val is None):
+		if(w.lower() in stopWords or val is None):
 			continue
 		else:
 			featureVector.append(w.lower())
@@ -198,7 +198,7 @@ print getWords(example, stopWords)
 # 	featureVector = getFeatureVector(processed_Tweet[x])
 # 	print featureVector
 #treat airline as text
-train_set = [(tw_text[i] + " " + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n) if tw_sent[i] != "neutral"] #for now: only allow conf. of 1 and no neutral
+train_set = [(tw_text[i] + " " + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n)] # if tw_sent[i] != "neutral"] #for now: only allow conf. of 1 and no neutral
 
 
 #treat location as a word:
@@ -256,7 +256,7 @@ def test_class(nb):
 
 	eval(Y_test,Y_pred)
 	eval(Y_test,Y_pred,"positive")
-	#eval(Y_test,Y_pred,"neutral")
+	eval(Y_test,Y_pred,"neutral")
 	eval(Y_test,Y_pred,"negative")
 	# print informative features about the classifier
 
