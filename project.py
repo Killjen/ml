@@ -24,6 +24,13 @@ tw_coord = tweets.tweet_coord
 tw_time = tweets.tweet_created
 tw_loc = tweets.tweet_location
 
+ex = 10232
+
+print tw_text[ex]
+print tw_air[ex]
+print tw_loc[ex]
+print tw_coord[ex]
+
 print len(tw_text)
 assert len(tw_text) == len(tw_name) and len(tw_name) == len(tw_sent) and len(tw_name)==len(tw_sent_conf) and len(tw_name)==len(tw_air) and len(tw_name) == len(tw_rt) and len(tw_name)==len(tw_coord) and len(tw_name) == len(tw_time) and len(tw_name)==len(tw_loc)
 n=len(tw_loc)
@@ -40,6 +47,7 @@ def getStats():
 	neg = 0
 	neu = 0
 	smileys = 0
+	hashtags = 0
 	for i in xrange(n):
 		if type(tw_coord[i]) is str:
 			coord += 1
@@ -57,7 +65,9 @@ def getStats():
 			neg += 1
 		utwt = unicode(tw_text[i], "utf-8")
 		if ":)" in tw_text[i] or ":-)" in tw_text[i] or ":D" in tw_text[i] or ":-D" in tw_text[i] or "=)" in tw_text[i] or "=D" in tw_text[i] or ";)" in tw_text[i] or ";-)" in tw_text[i] or ":'(" in tw_text[i] or ":-(" in tw_text[i] or ":(" in tw_text[i] or "D:" in tw_text[i] or "xD" in tw_text[i] or emoji.emojize(':thumps_up:', use_aliases=True) in utwt or emoji.emojize(':smile:', use_aliases=True) in utwt or emoji.emojize(':laughing:', use_aliases=True) in utwt or emoji.emojize(':smiley', use_aliases=True) in utwt or emoji.emojize(':smirk:', use_aliases=True) in utwt or emoji.emojize(':wink:', use_aliases=True) in utwt or emoji.emojize(':satisfied:', use_aliases=True) in utwt:
-			smileys+=1   
+			smileys+=1  
+		if len(re.findall("( #([^\s]+))", tw_text[i])) > 0:
+			hashtags+=1
 
 	print "available coords: " + str(coord) + " out of " + str(n) + " (" + str(100*coord/(1.0*n)) + "%)"
 	print "available locs: " + str(loc) + " out of " + str(n) + " (" + str(100*loc/(1.0*n)) + "%)"
@@ -67,6 +77,7 @@ def getStats():
 	print "sentiment neutral: " + str(neu) + " out of " + str(n) + " (" + str(100*neu/(1.0*n)) + "%)"
 	print "sentiment negative: " + str(neg) + " out of " + str(n) + " (" + str(100*neg/(1.0*n)) + "%)"
 	print "smileys: " + str(smileys) + " out of " + str(n) + " (" + str(100*smileys/(1.0*n)) + "%)"
+	print "hashtags: " + str(hashtags) + " out of " + str(n) + " (" + str(100*hashtags/(1.0*n)) + "%)"
 
 getStats()
 
@@ -160,7 +171,7 @@ def getWords(tweet, stopWords):
 		#replace two or more with two occurrences
 		#w = replaceTwoOrMore(w)
 		#strip punctuation
-		w = w.strip('\'"?,.')
+		w = w.strip('\'"?,.!')
 		#check if the word stats with an alphabet
 		val = re.search(r"^[a-zA-Z][a-zA-Z0-9]*$", w)
 		#ignore if it is a stop word
@@ -172,7 +183,14 @@ def getWords(tweet, stopWords):
 	return featureVector
 
 
+
 stopWords = getStopWordList('stopwords.txt')
+
+example = tw_text[ex] + " " + tw_air[ex] + " " + tw_loc[ex]
+print example
+example = processTweet(example)
+print example
+print getWords(example, stopWords)
 
 # processed_Tweet = tw_text.copy()
 # for x in xrange(len(tw_text)):
@@ -180,11 +198,11 @@ stopWords = getStopWordList('stopwords.txt')
 # 	featureVector = getFeatureVector(processed_Tweet[x])
 # 	print featureVector
 #treat airline as text
-train_set = [(tw_text[i] + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n) if tw_sent_conf[i] == 1]# and tw_sent[i] != "neutral"] #for now: only allow conf. of 1 and no neutral
+train_set = [(tw_text[i] + " " + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n) if tw_sent[i] != "neutral"] #for now: only allow conf. of 1 and no neutral
 
 
 #treat location as a word:
-train_set = map(lambda x : (processTweet(x[0] + x[1]),x[2]) if type(x[1]) is str else (processTweet(x[0]),x[2]) , train_set)  #HASKELL!
+train_set = map(lambda x : (processTweet(x[0] + " " + x[1]),x[2]) if type(x[1]) is str else (processTweet(x[0]),x[2]) , train_set)  #HASKELL!
 
 
 #get the featurevector
@@ -230,7 +248,7 @@ def eval(real,pred,sent="none"):
 				if  pred[i] == sent:
 					correct += 1
 
-	print "GNBayes: Correctly predicted " + str(correct/(1.0*total)) + " for sent " + sent
+	print "MNBayes: Correctly predicted " + str(correct/(1.0*total)) + " for sent " + sent
 
 def test_class(nb):
 	# Test the classifier
@@ -238,7 +256,7 @@ def test_class(nb):
 
 	eval(Y_test,Y_pred)
 	eval(Y_test,Y_pred,"positive")
-	eval(Y_test,Y_pred,"neutral")
+	#eval(Y_test,Y_pred,"neutral")
 	eval(Y_test,Y_pred,"negative")
 	# print informative features about the classifier
 
