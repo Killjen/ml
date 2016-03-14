@@ -15,6 +15,7 @@ import pandas as pd
 import os 
 import re
 from string import punctuation
+from string import digits
 import seaborn as sns
 
 
@@ -37,13 +38,14 @@ def getSentiment_Tw(conf):
 	tw_loc = tweets.tweet_location
 
 	if conf == False :
-		pos_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "positive"]#+tw_air[tweets.airline_sentiment == "positive"]
-		neu_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "neutral"]#+tw_air[tweets.airline_sentiment == "neutral"] 
-		neg_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "negative"]#+tw_air[tweets.airline_sentiment == "negative"]
+		pos_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "positive" ]#+ tw_air[tweets.airline_sentiment == "positive"]
+		neu_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "neutral" ]#+ tw_air[tweets.airline_sentiment == "neutral"] 
+		neg_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "negative" ]#+ tw_air[tweets.airline_sentiment == "negative"]
 	else:
 		pos_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "positive" and tw_sent_conf[i] == 1.0]
 		neu_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "neutral"  and tw_sent_conf[i] == 1.0]
 		neg_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "negative" and tw_sent_conf[i] == 1.0]
+
 
 	# alltw = [len(neg_text),len(pos_text),len(neu_text)]
 
@@ -73,8 +75,11 @@ def get_train_test(sent1, sent2, sent3="none"):
 	return x_train, x_test, y_train, y_test
 
 def cleanText(corpus, stopWords):
-	#corpus = [re.sub('((www\.[^\s]+)|(https?://[^\s]+))','URL',z) for z in corpus]
-	#corpus = [re.sub('@[^\s]+','AT_USER',z) for z in corpus]
+	'''
+	preprocessing
+	'''
+	# corpus = [re.sub('((www\.[^\s]+)|(https?://[^\s]+))','URL',z) for z in corpus]
+	# corpus = [re.sub('@[^\s]+','AT_USER',z) for z in corpus]
 	#corpus = [re.sub('[\s]+', ' ', z) for z in corpus]
 	#corpus = [re.sub(r'#([^\s]+)', r'\1', z) for z in corpus]
 
@@ -83,14 +88,18 @@ def cleanText(corpus, stopWords):
 	corpus = [z.lower().replace('\n','') for z in corpus]
 
 	corpus = [[y.strip(punctuation) for y in z.split() if y.strip(punctuation) not in stopWords] for z in corpus]
+	corpus = [[y.strip(digits) for y in z] for z in corpus]
+	#corpus = [[y.translate(None,digits) for y in z] for z in corpus]
 
-	# for i,z in enumerate(corpus):
-	# 	corpus[i] = [w for w in z if w not in stopWords ]
+	for i,z in enumerate(corpus):
+		corpus[i] = [w for w in z if w not in stopWords ]
 
 	return corpus
 
 def getStopWordList(stopWordListFileName):
-	#read the stopwords file and build a list
+	'''
+	creates a stopword list 
+	'''
 	stopWords = []
 	stopWords.append('at_user')
 	stopWords.append('url')
@@ -104,9 +113,10 @@ def getStopWordList(stopWordListFileName):
 	fp.close()
 	return stopWords
 
-
-#Build word vector for training set by using the average value of all word vectors in the tweet, then scale
 def buildWordVector(text, size):
+	'''
+	Build word vector for training set by using the average value of all word vectors in the tweet, then scale
+	'''
 	vec = np.zeros(size).reshape((1, size))
 	count = 0.
 	for word in text:
@@ -152,22 +162,22 @@ def classify(x_train, y_train, x_test, y_test):
 	train_vecs, test_vecs = build_and_scale(x_train, x_test, n_dim)
 
 	train_vecs, test_vecs = tfidf(train_vecs, test_vecs)
-	print train_vecs[:5]
+	#print train_vecs[:5]
 
 	lr = SGDClassifier(loss='log', penalty='l1')
-	lr = SGDClassifier()
-	parameters = {'loss':('log', 'hinge', 'squared_hinge', 'modified_huber'),
-				 'alpha':[.3,.6,1,1.3,1.6,2],
-				 'penalty':['none', 'l2', 'l1', 'elasticnet']}
-	clf = GridSearchCV(lr, parameters, cv=5)
-	# clf.fit([extract_features(w) for w in X_train], Y_train)
-	clf.fit(train_vecs, y_train)
-	print "Best accuracy score:"
-	print clf.best_score_, 'with', clf.best_params_
-	print "\nGrid scores on development set:"
-	for params, mean_score, scores in clf.grid_scores_:
-	    print("%0.3f (+/-%0.03f) for %r" % (mean_score, scores.std() * 2, params))
-	lr = SGDClassifier(loss=clf.best_params_['loss'], alpha=clf.best_params_['alpha'], penalty=clf.best_params_['penalty'])	
+	# lr = SGDClassifier()
+	# parameters = {'loss':('log', 'hinge', 'squared_hinge', 'modified_huber'),
+	# 			 'alpha':[.3,.6,1,1.3,1.6,2],
+	# 			 'penalty':['none', 'l2', 'l1', 'elasticnet']}
+	# clf = GridSearchCV(lr, parameters, cv=10)
+	# # clf.fit([extract_features(w) for w in X_train], Y_train)
+	# clf.fit(train_vecs, y_train)
+	# print "Best accuracy score:"
+	# print clf.best_score_, 'with', clf.best_params_
+	# print "\nGrid scores on development set:"
+	# for params, mean_score, scores in clf.grid_scores_:
+	#     print("%0.3f (+/-%0.03f) for %r" % (mean_score, scores.std() * 2, params))
+	# lr = SGDClassifier(loss=clf.best_params_['loss'], alpha=clf.best_params_['alpha'], penalty=clf.best_params_['penalty'])	
 
 	lr.fit(train_vecs, y_train)
 	y_pred = lr.predict(test_vecs)
@@ -180,10 +190,15 @@ def classify(x_train, y_train, x_test, y_test):
 	# print 'Test Accuracy: %.2f'%lr.score(mms.transform(test_vecs), y_test)
 	print 'Test Accuracy: %.2f'%lr.score(test_vecs, y_test)
 
+	pred_probas = lr.predict_proba(test_vecs)[:,1]
 
-	return test_vecs, y_pred
+
+	return test_vecs, pred_probas
 
 def plotlen(alltw, filltw):
+	'''
+	plot data count 
+	'''
 	n = len(alltw)
 	c = sns.color_palette()
 
@@ -225,7 +240,7 @@ def eval(real,pred,sent="none"):
 
 	print "Correctly predicted " + str(correct/(1.0*total)) + " for sent " + str(sent)
 
-def plotRoc(test_vecs, y_test, pred_probas,n):
+def plotRoc(test_vecs, y_test, pred_probas,n,sent=None):
 	'''
 	plot ROC curve
 	'''
@@ -234,7 +249,7 @@ def plotRoc(test_vecs, y_test, pred_probas,n):
 
 	fpr,tpr,_ = roc_curve(y_test, pred_probas)
 	roc_auc = auc(fpr,tpr)
-	plt.plot(fpr,tpr,label='area = %.2f' %roc_auc, color=c[n])
+	plt.plot(fpr,tpr,label= sent +' area = %.2f' %roc_auc, color=c[n])
 
 		
 	plt.plot([0, 1], [0, 1], 'k--')
@@ -251,7 +266,8 @@ if __name__ == '__main__':
 	conf_pos_text, conf_neu_text, conf_neg_text = getSentiment_Tw(True)	
 	
 	#crossvalidation
-	x_train, x_test, y_train, y_test = get_train_test(conf_pos_text, conf_neg_text)
+	x_train, x_test, y_train, y_test = get_train_test(conf_neu_text, conf_pos_text)
+	sent = "neu-pos"
 
 	stopWords = getStopWordList('stopwords.txt')
 
@@ -262,8 +278,39 @@ if __name__ == '__main__':
 	test_vecs, pred_probas = classify(x_train, y_train, x_test, y_test)
 
 
-	if roc == True:
-		plotRoc(test_vecs, y_test, pred_probas,1)
-
-
 	plt.show()
+
+
+
+
+	##############################################################################
+
+		# lr = RidgeClassifier() # 85
+	# parameters = {'normalize':(True, False),
+	# 			 'alpha':[0,.5,1,1.5,2],
+	# 			 'solver':['auto', 'svd', 'cholesky', 'lsqr', 'sparse_cg']}
+
+	# clf = GridSearchCV(lr, parameters, cv=5)
+	# clf.fit(train_vecs, y_train)
+	# print "Best accuracy score:"
+	# print clf.best_score_, 'with', clf.best_params_
+	# print "\nGrid scores on development set:"
+	# for params, mean_score, scores in clf.grid_scores_:
+	#     print("%0.3f (+/-%0.03f) for %r" % (mean_score, scores.std() * 2, params))
+	# lr = RidgeClassifier(normalize=clf.best_params_['normalize'], alpha=clf.best_params_['alpha'], solver=clf.best_params_['solver'])
+	
+
+	# lr = MultinomialNB()
+	# mms= MinMaxScaler(feature_range=(0,1))
+	# train_vecs = mms.fit_transform(train_vecs)
+	# parameters = {'fit_prior':(True, False), 'alpha':[0, .2, .4, .6, .8, 1, 1.2, 1.4, 1.6, 1.8, 2.0]}
+	# clf = GridSearchCV(lr, parameters, cv=5)
+	# # clf.fit([extract_features(w) for w in X_train], Y_train)
+	# clf.fit(train_vecs, y_train)
+	# print "Best accuracy score for MultinomialNB:"
+	# print clf.best_score_, 'with', clf.best_params_
+	# print "\nGrid scores on development set:"
+	# for params, mean_score, scores in clf.grid_scores_:
+	#     print("%0.3f (+/-%0.03f) for %r"
+	#           % (mean_score, scores.std() * 2, params))
+	# lr = MultinomialNB(fit_prior=clf.best_params_.values()[1], alpha=clf.best_params_.values()[0])
