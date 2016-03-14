@@ -140,7 +140,7 @@ def getWords(tweet, stopWords):
 		#check if the word stats with an alphabet
 		val = re.search(r"^[a-zA-Z][a-zA-Z0-9]*$", w)
 		#ignore if it is a stop word
-		if(w in stopWords or val is None):
+		if(w.lower() in stopWords or val is None):
 			continue
 		else:
 			featureVector.append(w.lower())
@@ -258,6 +258,12 @@ def param_optimization(clf, X_train):
 	plt.legend(loc=4)
 	plt.show()
 	return opt_mnb
+
+def tfidf(training_data, test_data):
+	tfidf_transformer = TfidfTransformer()
+	train_vecs = tfidf_transformer.fit_transform(training_data).todense()
+	test_vecs = tfidf_transformer.transform(test_data).todense()
+	return train_vecs, test_vecs
 
 #
 def eval(real,pred,sent="none"):
