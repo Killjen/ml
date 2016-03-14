@@ -7,9 +7,8 @@ import pandas as pd
 import math
 from wordcloud import WordCloud
 import re
-import nltk 
-from random import shuffle
 import emoji #https://pypi.python.org/pypi/emoji/
+import time
 
 filename = os.path.join('airline-twitter-sentiment','Tweets.csv')
 tweets = pd.read_csv(filename)
@@ -24,7 +23,7 @@ tw_coord = tweets.tweet_coord
 tw_time = tweets.tweet_created
 tw_loc = tweets.tweet_location
 
-ex = 10246
+ex = 10246 #example tweet to show preprocessing
 
 print tw_text[ex]
 print tw_air[ex]
@@ -100,113 +99,59 @@ def wcloud(text, filename):
 #wcloud(text, 'wc_all.png')
 
 #now for pos, neu and neg respectively
-pos_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="positive"])
-neu_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="neutral"])
-neg_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="negative"])
+#pos_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="positive"])
+#neu_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="neutral"])
+#neg_text = ' '.join([x for i,x in enumerate(tw_text) if tw_sent[i]=="negative"])
 
 # wcloud(pos_text,'wc_pos.png')
 # wcloud(neu_text,'wc_neu.png')
 # wcloud(neg_text,'wc_neg.png')
 
-#set up Stanford NLP: 
-#from nltk.tag import StanfordNERTagger
-#st = StanfordNERTagger('english.all.3class.distsim.crf.ser.gz') 
-#print st.tag('Rami Eid is studying at Stony Brook University in NY'.split()) 
-# from nltk.tag import StanfordPOSTagger
-# st = StanfordPOSTagger('english-bidirectional-distsim.tagger') 
-# st.tag('What is the airspeed of an unladen swallow ?'.split())
+############### Begin with NB Classification #######################################
 
-#start process_tweet
-def processTweet(tweet):
-	# process the tweets
+#read stop words from the file into list
+stop_words = []
+with open('stopwords.txt','r') as f:
+    for line in f:
+        for word in line.split():
+           stop_words.append(word) 
 
-	#Convert to lower case
+def getWords(tweet, stop_words):
 	tweet = tweet.lower()
-	#Convert www.* or https?://* to URL
-	tweet = re.sub('((www\.[^\s]+)|(https?://[^\s]+))','URL',tweet)
-	#Convert Smileys to :) or :(
-	#Convert @username to AT_USER
-	tweet = re.sub('@[^\s]+','AT_USER',tweet)
-	#Remove additional white spaces
-	tweet = re.sub('[\s]+', ' ', tweet)
-	#Replace #word with word
-	tweet = re.sub(r'#([^\s]+)', r'\1', tweet)
-	#trim
-	tweet = tweet.strip('\'"')
-	return tweet
-#end
-
-
-#initialize stopWords
-stopWords = []
-
-
-def replaceTwoOrMore(s):
-	#look for 2 or more repetitions of character and replace with the character itself
-	pattern = re.compile(r"(.)\1{1,}", re.DOTALL)
-	return pattern.sub(r"\1\1", s)
-
-
-def getStopWordList(stopWordListFileName):
-	#read the stopwords file and build a list
-	stopWords = []
-	stopWords.append('AT_USER')
-	stopWords.append('URL')
-
-	fp = open(stopWordListFileName, 'r')
-	line = fp.readline()
-	while line:
-		word = line.strip()
-		stopWords.append(word)
-		line = fp.readline()
-	fp.close()
-	return stopWords
-
-
-def getWords(tweet, stopWords):
-	featureVector = []
+	words = []
 	#split tweet into words
-	words = tweet.split()
-	for w in words:
-		#replace two or more with two occurrences
-		#w = replaceTwoOrMore(w)
-		#strip punctuation
-		w = w.strip('\'"?,.!&')
-		#check if the word stats with an alphabet
-		val = re.search(r"^[a-zA-Z][a-zA-Z0-9]*$", w)
-		#ignore if it is a stop word
-		if(w.lower() in stopWords or val is None):
+	tw_words = tweet.split()
+	for w in tw_words:
+		#ignore @username mentions:
+		if(w[0] == '@'):
+			continue
+		#turn an URL into 'url', regex from http://stackoverflow.com/questions/6038061/regular-expression-to-find-urls-within-a-string
+		w = re.sub('(http|ftp|https)://([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:/~+#-]*[\w@?^=%&/~+#-])?','url',w)
+		#remove special characters
+		w = ''.join(c for c in w if c.isalnum())
+		#ignore  stop words and numbers
+		if(w.lower() in stop_words or w.isdigit()):
 			continue
 		else:
-			featureVector.append(w.lower())
-		#featureVector.append(w.lower())
-	return featureVector
+			words.append(w.lower())
+		#words.append(w.lower())
+	return words
 
 
-
-stopWords = getStopWordList('stopwords.txt')
-
+#show preprocessing on the example
 example = tw_text[ex] + " " + tw_air[ex] + " " + tw_loc[ex]
-print example
-example = processTweet(example)
-print example
-print getWords(example, stopWords)
+print getWords(example, stop_words)
 
-# processed_Tweet = tw_text.copy()
-# for x in xrange(len(tw_text)):
-# 	processed_Tweet[x] = processTweet(tw_text[x])
-# 	featureVector = getFeatureVector(processed_Tweet[x])
-# 	print featureVector
-#treat airline as text
-train_set = [(tw_text[i] + " " + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n)] # if tw_sent[i] != "neutral"] #for now: only allow conf. of 1 and no neutral
-
+## preprocess the data
+#treat airline as a word
+train_set = [(tw_text[i] + " " + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n)] # if tw_sent[i] != "neutral" and tw_sent_conf[i] == 1] #for now: only allow conf. of 1 and no neutral
 
 #treat location as a word:
-train_set = map(lambda x : (processTweet(x[0] + " " + x[1]),x[2]) if type(x[1]) is str else (processTweet(x[0]),x[2]) , train_set)  #HASKELL!
+train_set = map(lambda x : (x[0] + " " + x[1],x[2]) if type(x[1]) is str else (x[0],x[2]) , train_set)
 
 
-#get the featurevector
-train_set = map(lambda x : (getWords(x[0], stopWords),x[1]), train_set)
+#get the featurevector as vector of words
+train_set = map(lambda x : (getWords(x[0], stop_words),x[1]), train_set)
 
 
 from sklearn.cross_validation import train_test_split
@@ -216,20 +161,18 @@ X_train, X_test, Y_train, Y_test = train_test_split([x for (x,s) in train_set], 
 featureList = []   #List of Words, if a tweet contains word at index m the mth entry of the featurevector will be the number of occurences of that word
 for words in X_train:
 	featureList.extend(words)
-print len(featureList)
+len(featureList)
 
 # Remove featureList duplicates
 featureList = list(set(featureList))
-print len(featureList)
+print "#features: ", len(featureList)
 
-def extract_features(tweet_words):
+def getFeatures(tweet_words):
 	featureVec = np.zeros(len(featureList))
 	for word in tweet_words:
 		for i in xrange(len(featureList)):
 			if word == featureList[i]: #Occurences
 				featureVec[i]+=1
-	#for (i,word) in enumerate(featureList):
-	#	featureVec[i] = (word in tweet_words) 
 	return featureVec
 
 #
@@ -251,8 +194,12 @@ def eval(real,pred,sent="none"):
 	print "MNBayes: Correctly predicted " + str(correct/(1.0*total)) + " for sent " + sent
 
 def test_class(nb):
+	start = time.time()
 	# Test the classifier
-	Y_pred = nb.fit([extract_features(w) for w in X_train], Y_train).predict([extract_features(w) for w in X_test])
+	Y_pred = nb.fit([getFeatures(w) for w in X_train], Y_train).predict([getFeatures(w) for w in X_test])
+	end = time.time()
+	diff = end - start
+	print "took " + str(int(diff / 60)) + ":" + str(int(diff % 60)) + " minutes"
 
 	eval(Y_test,Y_pred)
 	eval(Y_test,Y_pred,"positive")
