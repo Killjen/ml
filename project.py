@@ -38,9 +38,9 @@ def getSentiment_Tw(conf):
 	tw_loc = tweets.tweet_location
 
 	if conf == False :
-		pos_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "positive" ]#+ tw_air[tweets.airline_sentiment == "positive"]
-		neu_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "neutral" ]#+ tw_air[tweets.airline_sentiment == "neutral"] 
-		neg_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "negative" ]#+ tw_air[tweets.airline_sentiment == "negative"]
+		pos_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "positive" ]#+ tw_air+tw_loc
+		neu_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "neutral" ]#+ tw_air+tw_loc
+		neg_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "negative" ]#+ tw_air+tw_loc
 	else:
 		pos_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "positive" and tw_sent_conf[i] == 1.0]
 		neu_text = [t for i,t in enumerate(tweets.text) if tw_sent[i] == "neutral"  and tw_sent_conf[i] == 1.0]
@@ -72,7 +72,9 @@ def get_train_test(sent1, sent2, sent3="none"):
 		x_train, x_test, y_train, y_test = train_test_split(np.concatenate((sent1, sent2, sent3)), y, test_size=0.2, random_state=0)
 		roc = False #roc curve is for binary outputs
 
-	return x_train, x_test, y_train, y_test
+	xt = x_test
+
+	return x_train, x_test, y_train, y_test, xt
 
 def cleanText(corpus, stopWords):
 	'''
@@ -113,13 +115,13 @@ def getStopWordList(stopWordListFileName):
 	fp.close()
 	return stopWords
 
-def buildWordVector(text, size):
+def buildTweetVec(tweet, size):
 	'''
 	Build word vector for training set by using the average value of all word vectors in the tweet, then scale
 	'''
 	vec = np.zeros(size).reshape((1, size))
 	count = 0.
-	for word in text:
+	for word in tweet:
 		try:
 			vec += tw_w2v[word].reshape((1, size))
 			count += 1.
@@ -135,15 +137,15 @@ def build_and_scale(x_train, x_test, n_dim):
 	build all tweet vectors and scale
 	'''
 
-	train_vecs = np.concatenate([buildWordVector(z, n_dim) for z in x_train])
+	train_vecs = np.concatenate([buildTweetVec(z, n_dim) for z in x_train])
 	train_vecs = scale(train_vecs)
 
-	test_vecs = np.concatenate([buildWordVector(z, n_dim) for z in x_test])
+	test_vecs = np.concatenate([buildTweetVec(z, n_dim) for z in x_test])
 	test_vecs = scale(test_vecs)
 
 	return train_vecs, test_vecs
 
-def classify(x_train, y_train, x_test, y_test):
+def classify(x_train, y_train, x_test, y_test, xt):
 	'''
 	classification with stochastic gradient descent + logistic regression
 	'''
@@ -189,10 +191,16 @@ def classify(x_train, y_train, x_test, y_test):
 	print 'ACC:', accuracy_score(y_test, y_pred)
 	# print 'Test Accuracy: %.2f'%lr.score(mms.transform(test_vecs), y_test)
 	print 'Test Accuracy: %.2f'%lr.score(test_vecs, y_test)
-
+ 	
 	pred_probas = lr.predict_proba(test_vecs)[:,1]
 
-
+	# for i in xrange(50):
+	# 	print lr.predict(test_vecs[i]), xt[i], y_test[i]
+	print "\n",tw_w2v.most_similar('cancelled')
+	print "\n",tw_w2v.most_similar('thanks')
+	print "\n",tw_w2v.most_similar('delayed')
+	print "\n",tw_w2v.most_similar('best')
+	
 	return test_vecs, pred_probas
 
 def plotlen(alltw, filltw):
@@ -244,7 +252,6 @@ def plotRoc(test_vecs, y_test, pred_probas,n,sent=None):
 	'''
 	plot ROC curve
 	'''
-
 	c = sns.color_palette()
 
 	fpr,tpr,_ = roc_curve(y_test, pred_probas)
@@ -263,11 +270,10 @@ def plotRoc(test_vecs, y_test, pred_probas,n,sent=None):
 if __name__ == '__main__':
 
 	pos_text, neu_text, neg_text = getSentiment_Tw(False)
-	conf_pos_text, conf_neu_text, conf_neg_text = getSentiment_Tw(True)	
+	conf_pos_text, conf_neu_text, conf_neg_text = getSentiment_Tw(True)	#sent_conf = 1
 	
 	#crossvalidation
-	x_train, x_test, y_train, y_test = get_train_test(conf_neu_text, conf_pos_text)
-	sent = "neu-pos"
+	x_train, x_test, y_train, y_test, xt = get_train_test(conf_pos_text, conf_neu_text, conf_neg_text)
 
 	stopWords = getStopWordList('stopwords.txt')
 
@@ -275,7 +281,11 @@ if __name__ == '__main__':
 	x_test = cleanText(x_test, stopWords)
 
 	#initialize w2vec - standardization - classification
-	test_vecs, pred_probas = classify(x_train, y_train, x_test, y_test)
+	test_vecs, pred_probas = classify(x_train, y_train, x_test, y_test, xt)
+
+	#plot roc curve
+	if roc == True:
+		plotRoc(test_vecs, y_test, pred_probas)
 
 
 	plt.show()
