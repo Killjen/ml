@@ -196,10 +196,11 @@ def classify(x_train, y_train, x_test, y_test, xt):
 
 	# for i in xrange(50):
 	# 	print lr.predict(test_vecs[i]), xt[i], y_test[i]
-	print "\n",tw_w2v.most_similar('cancelled')
-	print "\n",tw_w2v.most_similar('thanks')
-	print "\n",tw_w2v.most_similar('delayed')
-	print "\n",tw_w2v.most_similar('best')
+	print "\n","Most similar words:"
+	print "\n",'cancelled: ',tw_w2v.most_similar('cancelled')
+	print "\n",'thanks:',tw_w2v.most_similar('thanks')
+	print "\n",'delayed:',tw_w2v.most_similar('delayed')
+	print "\n",'best:',tw_w2v.most_similar('best')
 	
 	return test_vecs, pred_probas
 
@@ -277,6 +278,7 @@ if __name__ == '__main__':
 
 	stopWords = getStopWordList('stopwords.txt')
 
+	#preprocessing
 	x_train = cleanText(x_train, stopWords)
 	x_test = cleanText(x_test, stopWords)
 
