@@ -116,7 +116,7 @@ with open('stopwords.txt','r') as f:
         for word in line.split():
            stop_words.append(word) 
 
-def getWords(tweet, stop_words):
+def getWords(tweet, stop_words): #preprocessing
 	tweet = tweet.lower()
 	words = []
 	#split tweet into words
@@ -144,24 +144,23 @@ print getWords(example, stop_words)
 
 ## preprocess the data
 #treat airline as a word
-train_set = [(tw_text[i] + " " + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n)] # if tw_sent[i] != "neutral" and tw_sent_conf[i] == 1] #for now: only allow conf. of 1 and no neutral
+prep_set = [(tw_text[i] + " " + tw_air[i],tw_loc[i],tw_sent[i]) for i in xrange(n)] # if tw_sent[i] != "neutral" and tw_sent_conf[i] == 1] #for now: only allow conf. of 1 and no neutral
 
-#treat location as a word:
-train_set = map(lambda x : (x[0] + " " + x[1],x[2]) if type(x[1]) is str else (x[0],x[2]) , train_set)
-
+#treat location as a word if available:
+prep_set = map(lambda x : (x[0] + " " + x[1],x[2]) if type(x[1]) is str else (x[0],x[2]) , prep_set)
 
 #get the featurevector as vector of words
-train_set = map(lambda x : (getWords(x[0], stop_words),x[1]), train_set)
+prep_set = map(lambda x : (getWords(x[0], stop_words),x[1]), prep_set)
 
-
+#split into training and test set
 from sklearn.cross_validation import train_test_split
-X_train, X_test, Y_train, Y_test = train_test_split([x for (x,s) in train_set], [s for (x,s) in train_set], test_size=0.4, random_state=0)
+X_train, X_test, Y_train, Y_test = train_test_split([x for (x,s) in prep_set], [s for (x,s) in prep_set], test_size=0.4, random_state=0)
 
 
-featureList = []   #List of Words, if a tweet contains word at index m the mth entry of the featurevector will be the number of occurences of that word
+featureList = []   #List of Words, if a tweet contains the word featureList[m] the mth entry of the featurevector will be the number of occurences of that word
 for words in X_train:
 	featureList.extend(words)
-len(featureList)
+#len(featureList)
 
 # Remove featureList duplicates
 featureList = list(set(featureList))
@@ -214,6 +213,15 @@ print " "
 print "Multinomial NB: "
 test_class(mnb)
 
+'''#show with an example how mnb handles irony
+ironic_tweet = "Great customer support I've only been waiting for 2 hours, thanks love it!"
+normal_tweet = "Bad customer support I've been waiting for 2 hours, hate it!"
+ironic_tweet2 = "Bad customer support I've been waiting for 1 second, totally hate it ;)"
+normal_tweet2 = "Great customer support I've only been waiting for 1 second, thanks love it!"
+normal_tweet3 = "Great customer support, thanks love it!"
+all_tweets = [ironic_tweet, normal_tweet, ironic_tweet2, normal_tweet2, normal_tweet3]
+print "ironic_tweet prediction: ", mnb.fit([getFeatures(w) for w in X_train], Y_train).predict([getFeatures(getWords(tweet, stop_words)) for tweet in all_tweets])
+'''
 def print_top15(feature_names,clf):
     """Prints features with the highest coefficient values, per class"""
     class_labels=clf.classes_
